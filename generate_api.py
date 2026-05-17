@@ -85,40 +85,38 @@ def write_router(theme: str, code: str, today: date) -> str:
 
 
 def regenerate_main():
-    routes_dir = os.path.join("api", "routes")
-    route_files = sorted(
-        f for f in os.listdir(routes_dir)
-        if f.endswith(".py") and f != "__init__.py"
-    )
-
-    import_lines = []
-    include_lines = []
-    for i, fname in enumerate(route_files):
-        module = fname[:-3]
-        alias = f"r{i}"
-        import_lines.append(f"from api.routes.{module} import router as {alias}")
-        include_lines.append(f"app.include_router({alias})")
-
+    """Rewrite api/main.py using importlib so date-prefixed module names work."""
     main_src = (
         '"""Auto-generated FastAPI application — new endpoint added daily."""\n'
-        "from fastapi import FastAPI\n"
-        + "\n".join(import_lines)
-        + "\n\n"
+        "import importlib\n"
+        "import os\n"
+        "from fastapi import FastAPI\n\n"
         "app = FastAPI(\n"
         '    title="KSRRtech Experimenting API",\n'
         '    description="Daily auto-generated public REST API endpoints powered by Claude.",\n'
         '    version="1.0.0",\n'
-        ")\n\n"
+        ")\n\n\n"
         "@app.get('/', tags=['root'])\n"
         "def root():\n"
         '    """API index — lists available route prefixes."""\n'
+        "    routes_dir = os.path.join(os.path.dirname(__file__), 'routes')\n"
+        "    modules = sorted(\n"
+        "        f[:-3] for f in os.listdir(routes_dir)\n"
+        "        if f.endswith('.py') and f != '__init__.py'\n"
+        "    )\n"
         "    return {\n"
         '        "message": "Welcome to KSRRtech Experimenting API",\n'
         '        "docs": "/docs",\n'
-        '        "total_route_modules": ' + str(len(route_files)) + ",\n"
-        "    }\n\n"
-        + "\n".join(include_lines)
-        + "\n"
+        '        "total_route_modules": len(modules),\n'
+        '        "routes": modules,\n'
+        "    }\n\n\n"
+        "# Dynamically load every router in api/routes/\n"
+        "_routes_dir = os.path.join(os.path.dirname(__file__), 'routes')\n"
+        "for _fname in sorted(os.listdir(_routes_dir)):\n"
+        "    if _fname.endswith('.py') and _fname != '__init__.py':\n"
+        "        _module_name = f'api.routes.{_fname[:-3]}'\n"
+        "        _mod = importlib.import_module(_module_name)\n"
+        "        app.include_router(_mod.router)\n"
     )
 
     with open(os.path.join("api", "main.py"), "w", encoding="utf-8") as f:
